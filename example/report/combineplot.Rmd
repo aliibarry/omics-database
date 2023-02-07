@@ -1,0 +1,128 @@
+---
+title: "Homepage Plots"
+output: 
+    prettydoc::html_pretty:
+        theme: cayman
+        highlight: github
+        toc: true
+        number_sections: true
+        df_print: paged
+params: 
+    matrix: NA
+    genes: NA
+    sex: NA
+    scRNA: NA
+    ratdeg: NA
+    mousedeg: NA
+    humandeg: NA 
+    human_gene_data: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=14,fig.height = 6)
+df = params$matrix 
+genes = params$genes
+sex = params$sex
+pbmc = params$scRNA 
+ratdeg = params$ratdeg
+mousedeg = params$mousedeg
+humandeg = params$humandeg 
+human_gene_data = params$human_gene_data
+sexlabels = c("F" = "Female", "M" = "Male", "mixed" = "Mixed")
+
+```
+
+# Load required libraries 
+```{r libraries,message=FALSE}
+library(plotly)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+```
+
+# Dot Plot
+Gene expression dot plots were created using median transcripts per million (TPM), and coloured by gene expression. Dot sizes are calculated as exponential TPM counts to reflect differences in more highly expressed genes. 
+```{r, message=FALSE,out.width="100%"}
+# separate data based on species 
+df_rat = df[df$Species == "Rat (DRG)",]
+df_mouse = df[df$Species == "Mouse (DRG)",]
+df_human = df[df$Species == "human",]
+
+df_mouse %>% as.data.frame %>% head
+```
+* Dot Plot
+```{r}
+# theme of the plot 
+thc = theme_bw() + theme(
+  panel.grid = element_blank(),
+  axis.title = element_blank(),
+  axis.text.x = element_text(size=8, angle = 45, hjust= 1),
+  axis.ticks.x = element_blank(),
+  axis.ticks.y = element_blank())
+
+# generate separate plots for each species 
+g1 = ggplot(df_rat, aes(x= Population, y = symbol)) + scale_colour_viridis_c(option = "magma", end = .90) +
+  scale_fill_continuous(limits=c(-10,10)) + scale_size_continuous(limits=c(-10,10)) +
+  geom_point(aes(col=log(expression), size=log(expression))) + thc + guides(col = FALSE, size = FALSE) +
+  facet_grid(.~Dataset, scale = "free", space='free') + ggtitle("Rat") + scale_x_discrete(labels=population_labels)
+g2 = ggplot(df_human, aes(x= Population, y = symbol)) + scale_colour_viridis_c(option = "magma", end = .90) +
+  scale_fill_continuous(limits=c(-10,10)) +
+  geom_point(aes(col=log(expression), size=log(expression))) + thc + guides(col = FALSE, size = FALSE) +
+  facet_grid(.~Dataset, scale = "free", space='free') + ggtitle("Human") + scale_x_discrete(labels=population_labels)
+g3 = ggplot(df_mouse, aes(x= Population, y = symbol)) + scale_colour_viridis_c(option = "magma", end = .90) +
+  scale_fill_continuous(limits=c(-10,10)) +
+  geom_point(aes(col=log(expression), size=log(expression))) + thc + guides(size = FALSE) +
+  facet_grid(.~Dataset, scale = "free", space='free') + ggtitle("Mouse") +
+  scale_x_discrete(labels=population_labels) + labs(col="log(TPM)", size = "")
+
+if (sex == "Both"){
+  plot_grid(g1,g2, g3,ncol=3, rel_widths = c(1,4,6))
+  }
+if (sex == "Separate") {
+  g1 = g1 + facet_grid(.~Dataset+Sex, labeller = labeller(Sex = sexlabels), scale ="free",space='free')
+  g2 = g2 + facet_grid(.~Dataset+Sex, labeller = labeller(Sex = sexlabels), scale ="free",space='free')
+  g3 = g3 + facet_grid(.~Dataset+Sex, labeller = labeller(Sex = sexlabels), scale ="free",space='free')
+  plot_grid(g1,g2, g3,ncol=3, rel_widths = c(1,4,6))
+}
+```
+
+# scRNA dot plot 
+Dotplot allows visualisation of change of gene expression across different identity clusters. The size of the dot encodes the percentage of cells within a class, while the color encodes the average expression level across all cells within a class (blue is high). 
+```{r, message=FALSE, fig.width=6, fig.height=5}
+# convert mgi_symbol(mouse) to hgn_symbol (human)
+hg = subset(human_gene_data, mgi_symbol %in% genes)$hgnc_symbol
+g = DotPlot(pbmc, features = hg) + thc + ggtitle("Human DRG subtypes", subtitle="Spatial-seq (Tavares-Ferreira 2021)")
+print(g)
+```
+
+# Dot Plot for Differential Gene Expression Analysis 
+A dot plot that allows visualisation of the significance level of differential gene expression. The color intensity encodes the log2 fold change of the gene expression level with respect to the naive condition. The dot represents if the change is significant (filled) or not (unfilled). 
+```{r, message=FALSE,out.width="100%"}
+ratdeg() %>% as.data.frame %>% head 
+g1 = ggplot(data = ratdeg(), aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
+  geom_point(aes(col=LFC, shape=sig, size=0.3)) + ggtitle("Rat") +
+  labs(shape = "", size = "") + facet_grid(.~Dataset, scale = "free", space='free')  +
+  guides(col = FALSE, shape = FALSE, sig=FALSE, size = FALSE) +
+  scale_colour_continuous(limits=c(0,1)) + scale_x_discrete(labels=subpopulation_labels) +
+  scale_colour_viridis_c(option = "viridis", end = .90) +
+  scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "")
+
+
+g2 = ggplot(data = humandeg(), aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) + ggtitle("Human") +
+  geom_point(aes(col=LFC, shape=sig, size=0.3)) + facet_grid(.~Dataset, scale = "free", space='free') +
+  guides(col = FALSE, shape = FALSE, sig=FALSE, size = FALSE) + scale_x_discrete(labels=subpopulation_labels) +
+  scale_colour_continuous(limits=c(0,1)) +
+  scale_colour_viridis_c(option = "viridis", end = .90) +
+  scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "")
+
+g3 = ggplot(data = mousedeg(), aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
+  ggtitle("Mouse") + geom_point(aes(col=LFC, shape=sig, size=0.3)) +
+  facet_grid(.~Dataset, scale = "free", space='free') + scale_x_discrete(labels=subpopulation_labels) +
+  scale_colour_continuous(limits=c(0,1)) +
+  scale_colour_viridis_c(option = "viridis", end = .90) +
+  scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "") + guides(size=FALSE)
+
+plot_grid(g1,g2, g3,ncol=3, rel_widths = c(1,4,6))
+
+```
+

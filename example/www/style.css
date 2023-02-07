@@ -1,0 +1,97 @@
+ /* Basic styling */
+
+body {
+  font-family: Gadugi;  
+}
+
+.content-wrapper {background-color: #fff;}
+
+.main-header .logo {
+  font-family: "Gadugi";
+  font-weight: bold;
+  font-size: 20px;
+}
+
+ /* Heading + Sidebar colours */
+.skin-blue .main-header .logo {
+   background-color: #53163dff;
+}
+.skin-blue .main-header .navbar {
+   background-color: #53163dff;
+}   
+.skin-blue .main-header .navbar .sidebar-toggle:hover{
+   background-color: #842361ff;
+}
+.skin-blue .main-header .logo:hover {
+  background-color: #53163dff;
+}
+
+.box-success:hover {
+  background-color: lightblue;
+}
+
+
+.skin-blue .main-sidebar .sidebar .sidebar-menu .active a{
+  background-color: #1e282cff;
+}
+
+
+ /* Dashboard boxes */
+.box.box-solid.box-primary>.box-header {
+  color:#000; 
+  background-color: #ededed;
+  
+}
+
+
+.box.box-solid.box-primary{
+  border-bottom-color:#666666;
+  border-left-color:#666666;
+  border-right-color:#666666;
+  border-top-color:#666666;
+  
+
+}
+
+.box-primary{
+  box-shadow: 0 2px 5px 0 rgba(0,0,0,0.18), 0 1px 5px 0 rgba(0,0,0,0.15);
+}
+
+
+
+
+* .box {margin: 2px;}
+
+.centerImage
+{
+ text-align:center;
+ display:block;
+}
+
+
+ /* tabBox background */  
+  .nav-tabs-custom > .nav-tabs > li.active {
+     border-top-color:lightblue;
+}
+
+.nav-tabs-custom > .nav-tabs {
+  box-shadow:0 2px 5px 0 rgba(0,0,0,0.18), 0 1px 5px 0 rgba(0,0,0,0.15);
+  border-top-color:lightblue;
+}
+
+ .nav-tabs-custom .nav-tabs li.active:hover a, .nav-tabs-custom .nav-tabs li.active a {
+     background-color: transparent;
+}
+
+.nav-tabs-custom .nav-tabs li.active {
+     border-top-color: lightblue;
+}
+
+.box-body { margin-bottom: 20px; } 
+
+.tabBox-custom {
+  box-shadow: 0 2px 5px 0 rgba(0,0,0,0.18), 0 1px 5px 0 rgba(0,0,0,0.15);
+}
+
+
+

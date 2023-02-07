@@ -1,0 +1,273 @@
+---
+title: "RNAseq plotting"
+author: "Lynne"
+date: '2023-01-09'
+output: 
+    prettydoc::html_pretty:
+        theme: cayman
+        highlight: github
+        toc: true
+        number_sections: true
+        df_print: paged
+params: 
+    matrix: NA
+    colD: NA
+    species: NA
+    genes: NA
+    paintype: NA
+    sex: NA
+    injury_data: NA
+    include_deg: NA
+    deg_df_list: NA 
+    pop_list: NA
+    gene_data: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+count_df <- params$matrix
+species <- params$species
+genes <- params$genes
+paintype <- params$paintype
+sex <- params$sex
+colData <- params$colD
+injury_data = params$injury_data
+deg_df_list = params$deg_df_list 
+include_deg = params$include_deg
+pop_list = params$pop_list
+gene_data = params$gene_data
+sexlabels = c("F" = "Female", "M" = "Male", "mixed" = "Mixed")
+```
+
+# Load required libraries 
+```{r libraries,message=FALSE}
+library(plotly)
+library(plyr)
+library(dplyr)
+library(gridExtra)
+```
+
+# Data 
+```{r data,message=FALSE}
+count_df %>% as.data.frame %>% head
+```
+
+# Data pre-processing
+```{r,message=FALSE}
+if ('mgi_symbol' %in% colnames(count_df)) {
+  df = count_df[count_df[,'mgi_symbol'] %in% genes,]
+  matfilt = subset(df, select=-c(symbol, mgi_symbol))
+}
+if (('mgi_symbol' %in% colnames(count_df)) == FALSE) {
+  df = count_df[count_df[,'symbol'] %in% genes,]
+  matfilt = subset(df, select=-c(symbol))
+}
+# add symbols based on species
+tcounts <- t(matfilt) %>%
+  base::merge(colData, ., by="row.names") %>%
+  gather(gene, expression, (ncol(.)-nrow(matfilt)+1):(ncol(.)))
+if (species == 'mouse') {
+  tcounts$symbol <- gene_data[tcounts$gene,]$mgi_symbol # add gene symbols for goi
+}
+if (species == "rat") {
+  tcounts$symbol <- gene_data[tcounts$gene,]$rgd_symbol
+}
+if (species == "human") {
+  tcounts$symbol <- gene_data[tcounts$gene,]$hgnc_symbol
+}
+tcounts %>% as.data.frame %>% head
+```
+
+# Dot plots 
+Gene expression dot plots were created using median transcripts per million (TPM), and coloured by gene expression. Dot sizes are calculated as exponential TPM counts to reflect differences in more highly expressed genes. 
+```{r,message=FALSE}
+# group by experimental variables
+if (sex == "Both") {
+  tcounts_med <- tcounts %>% dplyr::group_by(Condition, Population, symbol, Dataset, Species) %>%
+         dplyr::summarise(expression=median(as.double(expression)))
+}
+if(sex == "Separate") {
+  tcounts_med <- tcounts %>% dplyr::group_by(Condition, Population, symbol, Sex, Dataset, Species) %>%
+         dplyr::summarise(expression=median(as.double(expression)))
+}
+tcounts_med <- tcounts_med[!tcounts_med$Condition %in% paintype, ] # remove samples in pain condition
+tcounts_med %>% as.data.frame %>% head
+```
+
+* plotting 
+```{r, include=TRUE, message=FALSE}
+# plot dot plot 
+g = ggplot(data = tcounts_med, aes(x=Population, y = symbol)) +
+      scale_colour_viridis_c(option = "magma", end = .90) +
+      geom_point(aes(col=log(expression), size=log(expression))) + th +
+      facet_grid(.~Dataset, scales = "free", space="free") +
+      scale_x_discrete(labels=population_labels) + labs(col="log(TPM)", size = "")
+# facet by sex 
+if (sex == "Separate") {
+  g = g + facet_wrap(~Sex, labeller = labeller(Sex = sexlabels), scales ="free_x")
+}
+
+print(g)
+```
+
+# Line Plot
+Line plots show the change of gene expression in naive vs injured conditions. The linetype is encoded by the timepoint of treatment group (if existed). The color is encoded by the gene.  
+* data pre-processing for line plots 
+```{r,message=FALSE}
+if (is.null(injury_data) == FALSE) {
+      count_df = injury_data
+      if ('mgi_symbol' %in% colnames(count_df)) {
+        df = count_df[count_df[,'mgi_symbol'] %in% genes,]
+        matfilt = subset(df, select=-c(symbol, mgi_symbol))
+      }
+      else{
+        df = count_df[count_df[,'symbol'] %in% genes,]
+        matfilt = subset(df, select=-c(symbol))
+      }
+      tcounts <- t(matfilt) %>%
+        base::merge(colData, ., by="row.names") %>%
+        gather(gene, expression, (ncol(.)-nrow(matfilt)+1):(ncol(.)))
+      if (species == 'mouse') {
+        tcounts$symbol <- gene_data[tcounts$gene,]$mgi_symbol # add gene symbols for goi
+      }
+      if (species == "rat") {
+        tcounts$symbol <- gene_data[tcounts$gene,]$rgd_symbol
+      }
+      if (species == "human") {
+        tcounts$symbol <- gene_data[tcounts$gene,]$hgnc_symbol
+      }
+    }
+    
+ifelse(sex=="Both", tcounts_m <- tcounts %>% dplyr::group_by(Condition, symbol, Timepoint, Dataset, Species) %>%
+         dplyr::summarise(expression=median(as.double(expression))),
+       tcounts_m <- tcounts %>% dplyr::group_by(Condition, symbol, Sex, Timepoint, Dataset, Species) %>%
+         dplyr::summarise(expression=median(as.double(expression))))
+tcounts_m = tcounts_m[!tcounts_m$Condition %in% "Undetermined", ]
+tcounts_m %>% as.data.frame %>% head
+```
+* Plotting 
+```{r,message=FALSE}
+g = ggplot(data=tcounts_m, aes(x=Condition, y=expression, group=interaction(symbol, Timepoint))) 
+g = g + scale_colour_viridis(discrete=TRUE, end = .80)
+g = g + geom_line(aes(color=symbol, linetype=Timepoint))
+g = g + geom_point(aes(col=symbol)) 
+g = g + theme_bw() + theme(panel.grid = element_blank(),
+        axis.title = element_text(size=12),
+        axis.text.x = element_text(size=10, angle = 45, hjust= 1),
+        axis.text.y = element_text(size=10),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), legend.justification = c(0,0.3)) 
+g = g + ylab("Expression")
+g = g + guides(linetype=guide_legend(label.hjust=0.5))
+if (sex == "Separate") {
+  g = g + facet_wrap(~Sex, labeller = labeller(Sex = sexlabels), scales ="free_x")
+}
+print(g)
+```
+
+# Differential Gene Analysis Plot 
+A dot plot that allows visualisation of the significance level of differential gene expression. The color intensity encodes the log2 fold change of the gene expression level with respect to the naive condition. The dot represents if the change is significant (filled) or not (unfilled). 
+```{r,message=FALSE}
+
+if (include_deg == TRUE) {
+  geneids = genes
+  if (species == "rat") {
+    geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$rgd_symbol
+  }
+  if (species == "human") {
+    geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$hgnc_symbol
+  }
+  
+  # generate deg df
+  i=1
+  final_df = data.frame()
+  for (df in deg_df_list) {
+    if ("hsymbol" %in% colnames(df)){
+      df$symbol = df$hsymbol
+    }
+    df = df[c("log2FoldChange", "padj", "symbol")]
+    df$Population = rep(pop_list[i], nrow(df))
+    final_df = rbind(final_df, df)
+    i=i+1
+  }
+  final_df = mutate(final_df, sig=ifelse(final_df$padj<0.05, "SIG", "NS"))
+  deg = final_df %>% filter(symbol %in% geneids)
+  deg %>% as.data.frame %>% head
+  # plotting 
+  g =  ggplot(data = deg, aes(x=interaction(Population), y = symbol,
+                             text = paste('padj: ',padj))) +
+      scale_colour_viridis_c(option = "viridis", end = .90) +
+      geom_point(aes(col=log2FoldChange, shape=sig, size=0.5)) + scale_shape_manual(values=c(1, 19)) +
+      th + labs(shape = "", size = "") + scale_x_discrete(labels=subpopulation_labels)
+  print(g)
+}
+```
+
+# Volcano Plot 
+Volcano plot showing pain vs naive samples. Genes of interest are labelled using color. 
+```{r,message=FALSE, fig.width=14,fig.height = 14}
+theme_line = theme_bw() + 
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size=12),
+        axis.text.x = element_text(size=10, angle = 45, hjust= 1),
+        axis.text.y = element_text(size=10),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), legend.justification = c(0,0.3), 
+        plot.title = element_text (hjust = 0.5)) 
+
+
+if (include_deg == TRUE){
+  # for volcano
+  generate_dict = function(names, dfs) {
+    d = dict()
+    for (i in c(1:length(names))) {
+      d[[names[i]]] = dfs[i]
+    }
+    return(d)
+  }
+  
+pop_df_dic = generate_dict(pop_list, deg_df_list)
+    
+# ploting volcano plots
+geneids = genes
+if (species == "rat") {
+  geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$rgd_symbol
+}
+if (species == "human") {
+  geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$hgnc_symbol
+}
+
+plots = list()
+for (volc_pop in pop_list) {
+  res = as.data.frame(pop_df_dic[[volc_pop]])
+  res = mutate(res, log10fdr=-log10(padj))
+  df = res
+
+  il_genes <- df %>% filter(symbol %in% geneids)
+  g = ggplot(data = df, aes(x = log2FoldChange, y = log10fdr)) +
+    geom_point(colour = "grey", alpha = 0.5) +
+    geom_point(data = il_genes, # New layer containing data subset il_genes
+               size = 2,
+               shape = 21,
+               fill = "firebrick",
+               colour = "black") +
+    geom_hline(yintercept = -log10(0.05),
+               linetype = "dashed") +
+    geom_vline(xintercept = c(log2(0.5), log2(2)),
+               linetype = "dashed") +
+    geom_label_repel(data = il_genes,
+                     aes(label = symbol),
+                     force = 2,
+                     nudge_y = 1) +
+    scale_colour_manual(values = cols) +
+    scale_x_continuous(breaks = c(seq(-10, 10, 2)),
+                       limits = c(-10, 10)) + theme_line +
+    labs(y="-log10(FDR)") + ggtitle(volc_pop)
+  plots = append(list(g), plots)
+}
+gridExtra::grid.arrange(grobs = plots, ncol=3)
+}
+
+```
+
+
