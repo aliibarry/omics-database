@@ -1,5 +1,11 @@
  /* Basic styling */
-
+html, body, .container-fluid {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    
 body {
   font-family: Gadugi;  
 }
@@ -12,24 +18,31 @@ body {
   font-size: 20px;
 }
 
+
+
  /* Heading + Sidebar colours */
 .skin-blue .main-header .logo {
-   background-color: #53163dff;
+   background-color: #002147;
+   
 }
 .skin-blue .main-header .navbar {
-   background-color: #53163dff;
+   background-color: #002147;
 }   
 .skin-blue .main-header .navbar .sidebar-toggle:hover{
-   background-color: #842361ff;
+   background-color: #002147;
 }
 .skin-blue .main-header .logo:hover {
-  background-color: #53163dff;
+  background-color: #002147;
 }
 
 .box-success:hover {
   background-color: lightblue;
 }
 
+.box.box-primary {
+  border-color: #002147;
+  
+}
 
 .skin-blue .main-sidebar .sidebar .sidebar-menu .active a{
   background-color: #1e282cff;
@@ -38,11 +51,9 @@ body {
 
  /* Dashboard boxes */
 .box.box-solid.box-primary>.box-header {
-  color:#000; 
-  background-color: #ededed;
+  background-color: #002147;
   
 }
-
 
 .box.box-solid.box-primary{
   border-bottom-color:#666666;
@@ -92,6 +103,47 @@ body {
 .tabBox-custom {
   box-shadow: 0 2px 5px 0 rgba(0,0,0,0.18), 0 1px 5px 0 rgba(0,0,0,0.15);
 }
+
+
+
+.btn-success {
+      display:block;
+      border: 1px solid #002147;
+      background-color: #002147;
+      color: white;
+      width: 350px;
+      align-self: center;
+      margin-bottom: 15px;
+      }
+      
+.btn-success:hover{
+  background-color: #1F456E;
+  display: block;
+  border: 1px solid #1F456E;
+  width: 350px;
+  align-self: center;
+  margin-bottom: 15px;
+}
+
+.btn-success:active {
+  background-color: #1F456E;
+  display: block;
+  border: 1px solid #1F456E;
+  width: 350px;
+  align-self: center;
+  margin-bottom: 15px;
+}
+
+.btn-success:focus {
+   background-color: #1F456E;
+  display: block;
+  border: 1px solid #1F456E;
+  width: 350px;
+  align-self: center;
+  margin-bottom: 15px;
+}
+
+
 
 
 

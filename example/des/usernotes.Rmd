@@ -1,0 +1,13 @@
+---
+title: "User Guide"
+author: "amb"
+date: "22/02/2023"
+output: html_document
+---
+
+These datasets vary in sample size, cell type composition, library preparation and sequencing method. They also contain a variety of factors including sex, age, injury model, and timepoints, among others. 
+
+Counts are shown here as transcripts per million (TPM), with differential gene expression defined here as an FDR < 0.05 and an absolute log2 fold change (LFC) > 1, although each study also uses specific analysis pipelines which vary by read alignment, normalization, and filtering criteria (including count cutoffs, FDR correction methods, fold change moderation, etc.), as described in their respective methods. 
+
+The presence/absence of a gene will depend on these differences, as will the likelihood of a gene to reach a significance threshold.
+

@@ -30,6 +30,7 @@ humandeg = params$humandeg
 human_gene_data = params$human_gene_data
 sexlabels = c("F" = "Female", "M" = "Male", "mixed" = "Mixed")
 
+
 ```
 
 # Load required libraries 
@@ -91,16 +92,16 @@ Dotplot allows visualisation of change of gene expression across different ident
 ```{r, message=FALSE, fig.width=6, fig.height=5}
 # convert mgi_symbol(mouse) to hgn_symbol (human)
 hg = subset(human_gene_data, mgi_symbol %in% genes)$hgnc_symbol
-g = DotPlot(pbmc, features = hg) + thc + ggtitle("Human DRG subtypes", subtitle="Spatial-seq (Tavares-Ferreira 2021)")
+g = DotPlot(pbmc, features = hg) + thc + ggtitle("Human DRG subtypes", subtitle="Spatial-seq (Tavares-Ferrelra 2021)")
 print(g)
 ```
 
 # Dot Plot for Differential Gene Expression Analysis 
 A dot plot that allows visualisation of the significance level of differential gene expression. The color intensity encodes the log2 fold change of the gene expression level with respect to the naive condition. The dot represents if the change is significant (filled) or not (unfilled). 
 ```{r, message=FALSE,out.width="100%"}
-ratdeg() %>% as.data.frame %>% head 
-g1 = ggplot(data = ratdeg(), aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
-  geom_point(aes(col=LFC, shape=sig, size=0.3)) + ggtitle("Rat") +
+ratdeg %>% as.data.frame %>% head 
+g1 = ggplot(data = ratdeg, aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
+  geom_point(aes(col=log2FoldChange, shape=sig, size=0.3)) + ggtitle("Rat") +
   labs(shape = "", size = "") + facet_grid(.~Dataset, scale = "free", space='free')  +
   guides(col = FALSE, shape = FALSE, sig=FALSE, size = FALSE) +
   scale_colour_continuous(limits=c(0,1)) + scale_x_discrete(labels=subpopulation_labels) +
@@ -108,15 +109,15 @@ g1 = ggplot(data = ratdeg(), aes(x=interaction(Population), y = symbol, text = p
   scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "")
 
 
-g2 = ggplot(data = humandeg(), aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) + ggtitle("Human") +
-  geom_point(aes(col=LFC, shape=sig, size=0.3)) + facet_grid(.~Dataset, scale = "free", space='free') +
+g2 = ggplot(data = humandeg, aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) + ggtitle("Human") +
+  geom_point(aes(col=log2FoldChange, shape=sig, size=0.3)) + facet_grid(.~Dataset, scale = "free", space='free') +
   guides(col = FALSE, shape = FALSE, sig=FALSE, size = FALSE) + scale_x_discrete(labels=subpopulation_labels) +
   scale_colour_continuous(limits=c(0,1)) +
   scale_colour_viridis_c(option = "viridis", end = .90) +
   scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "")
 
-g3 = ggplot(data = mousedeg(), aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
-  ggtitle("Mouse") + geom_point(aes(col=LFC, shape=sig, size=0.3)) +
+g3 = ggplot(data = mousedeg, aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
+  ggtitle("Mouse") + geom_point(aes(col=log2FoldChange, shape=sig, size=0.3)) +
   facet_grid(.~Dataset, scale = "free", space='free') + scale_x_discrete(labels=subpopulation_labels) +
   scale_colour_continuous(limits=c(0,1)) +
   scale_colour_viridis_c(option = "viridis", end = .90) +

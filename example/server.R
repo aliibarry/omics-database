@@ -6,682 +6,218 @@
 ##   for non-commercial use only        ##
 ##########################################
 
-# load data
-data_dir = "data/database.RData"
-scRNA_dir = "data/drg.combined.rds"
-theme_dir = "labels.R"
+scRNA_dir   = "data/drg.combined.rds"
+theme_dir   = "global.R"
+network_dir = "data/network.RData"
+# data_dir = "data/drg.RData"
+# gene_dir = "data/gene.RData"
 
-load(data_dir)
-source(theme_dir) # include the theme and labels
-
-df_list = list(TPM_subtype,TPM_mouse,TPM_rat, TPM_ipsc, TPM_HS_diabetes, TPM_HS_CTS,TPM_zheng, TPM_humandrg)
-col_list = list(bulkseq_colData,TPM_mouse_colData,TPM_rat_colData,ipsc_colData,db_colData,skin_colData,zheng_colData, humandrg_colData) 
-pain_list = list("ipsi", "SNI", "SNT", "patient", "PDPN", "pre_Surgery", "", "P")
-species_list = list("mouse", "mouse", "rat", "human", "human", "human", "mouse", "human")
-
-credentials <- data.frame(
-  user = c("shiny", "ndcn"),
-  password = c("azerty", "ndcn-rnaseq"),
-  stringsAsFactors = FALSE
-)
-
-
-generate_degdf <- function(deg_df_list, pop_list, dataset) {
-  i=1
-  final_df = data.frame()
-  for (df in deg_df_list) {
-    # for the young and old dataset
-    if ("hsymbol" %in% colnames(df)){
-      df$symbol = df$hsymbol
-    }
-    df = df[c("log2FoldChange", "padj", "symbol")]
-    colnames(df) = c("LFC", "padj", "symbol")
-    df$Population = rep(pop_list[i], nrow(df))
-    final_df = rbind(final_df, df)
-    i=i+1
-  }
-  if (!is.null(dataset)) {
-    final_df$Dataset = rep(dataset, nrow(final_df))
-  }
-  final_df = mutate(final_df, sig=ifelse(final_df$padj<0.05, "SIG", "NS"))
-  return(final_df)
-}
+des_df = data.frame(
+  Dataset = c("Subtype DRG (Barry)", "Mouse DRG Bulk", "Rat DRG Bulk",
+              "Human iPSC HSN1", "Human Skin Diabetes", "Human skin Carpal Tunnel (CTS)",
+              "Mouse DRG Subtype (Zheng)","Human DRG RNAseq", "Human DRG spatial-seq",
+              "Rat DRG HIV", "Rat DRG SNT (L5)", "Rat DRG SNI", "Rat DRG bone-cancer"),
+  pain = c("ipsi", "SNI", "SNT", "patient", "PDPN", "pre_Surgery", "", "P", "", "HIV", "SNT_L5vsSHAM", "SNI_adult", "bone_cancer"),
+  Pain_Model = c("Spared Nerve Injury", "Spared Nerve Injury", "Spared Nerve Injury", "Neuropathic Pain", "Diabetic Peripheral Neuropathy", "Neuropathic Pain",
+                 "N/A", "N/A", "Neuropathic Pain", "HIV", "Spinal Nerve Transection", "Spared Nerve Injury", "Bone Cancer"),
+  Species = c("mouse", "mouse", "rat", "human", "human", "human", "mouse", "human", "human", "rat", "rat", "rat", "mouse"),
+  count = c("TPM_subtype", "TPM_mouse", "TPM_rat", "TPM_ipsc", "TPM_HS_diabetes", "TPM_HS_CTS", "TPM_zheng", "TPM_humandrg", "", "", "", "", ""),
+  include_subtypes = c(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,  FALSE, FALSE, FALSE, FALSE),
+  include_degs = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE),
+  Name = c("subtype", "mouse", "rat", "ipsc", "HS_diabetes", "HS_CTS", "zheng", "humandrg", "scrna", "hiv", "sntl5", "sni", "bone_cancer"),
+  injury_data = c("bulkseq_mat", "", "", "", "", "", "", "", "", "", "", "", ""),
+  deg_df_name = c("subtype_deg_df", "mouse_deg_df", "rat_deg_df", "ipsc_deg_df", "db_deg_df", "cts_deg_df", "", "", "", 
+                  "HIV_deg_df", "SNT_L5vsSHAM_deg_df", "SNI_adult_deg_df", "bone_cancer_deg_df"),
+  include_gois = c(TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE),
+  colDatas = c("bulkseq_colData", "TPM_mouse_colData", "TPM_rat_colData", "ipsc_colData", "db_colData", "skin_colData",
+               "zheng_colData", "humandrg_colData", "", "", "", "", ""),
+  type = c("bulk","bulk","bulk","bulk","bulk","bulk","bulk","bulk", "single", "bulk", "bulk", "bulk", "bulk"),
+  Tissue = c("DRG", "DRG", "DRG", "iPSC", "Skin", "Skin", "DRG", "DRG", "DRG", "DRG", "DRG","DRG", "Bone"), 
+  include_count = c(TRUE, TRUE, TRUE, TRUE,TRUE, TRUE, TRUE, TRUE,TRUE, FALSE, FALSE, FALSE, FALSE))
 
 
-
-generate_combine_dataset <- function(df_list, genes, sex, col_list, pain_list, species_list) {
-  final_df = data.frame()
-  i = 1
-  for (df in df_list) {
-    
-    # filter
-    if (('mgi_symbol' %in% colnames(df))) {
-      filt = df[df[,'mgi_symbol'] %in% genes,]
-    }
-    else{
-      filt = df[df[,'symbol'] %in% genes,]
-    }
-    
-    # remove unwanted columns
-    if ('mgi_symbol' %in% colnames(filt)) {
-      matfilt = subset(filt, select=-c(symbol, mgi_symbol))
-    }
-    else{
-      matfilt = subset(filt, select=-c(symbol))
-    }
-    
-    # merge
-    tcounts <- t(matfilt) %>%
-      base::merge(as.data.frame(col_list[i]), ., by="row.names") %>%
-      gather(gene, expression, (ncol(.)-nrow(matfilt)+1):(ncol(.)))
-    
-    species = species_list[i]
-    if (species == 'mouse') {
-      tcounts$symbol <- mouse_gene_data[tcounts$gene,]$mgi_symbol
-    }
-    if (species == "rat") {
-      tcounts$symbol <- rat_gene_data[tcounts$gene,]$rgd_symbol
-    }
-    if (species == "human") {
-      tcounts$symbol <- human_gene_data[tcounts$gene,]$hgnc_symbol
-    }
-    ifelse(sex=="Both", tcounts_med <- tcounts %>% dplyr::group_by(Condition, Population, symbol, Dataset, Species) %>%
-             dplyr::summarise(expression=median(as.double(expression))), tcounts_med <- tcounts %>% dplyr::group_by(Condition, Population, symbol, Sex, Dataset, Species) %>%
-             dplyr::summarise(expression=median(as.double(expression))))
-    tcounts_med <- tcounts_med[!tcounts_med$Condition %in% pain_list[i], ]
-    final_df = rbind(tcounts_med, final_df)
-    i = i+1
-  }
-  return(final_df)
-}
-
-
-shinydegplot <- function(input, output, session, deg_df_list, pop_list, dataset, genes) {
-  
-  deg_df = generate_degdf(deg_df_list, pop_list, dataset)
-  
-  deg <- reactive({
-    df <- deg_df %>% filter(symbol %in% genes)
-    return(df)
-  }) %>% bindCache(genes)
-  
-  output$deg_plot <- renderPlotly({
-    ggplot(data = deg(), aes(x=interaction(Population), y = symbol,
-                             text = paste('padj: ',padj))) +
-      scale_colour_viridis_c(option = "viridis", end = .90) +
-      geom_point(aes(col=LFC, shape=sig, size=0.5)) + scale_shape_manual(values=c(1, 19)) +
-      th + labs(shape = "", size = "") + facet_wrap(~Dataset, scales = "free_x") + scale_x_discrete(labels=subpopulation_labels)
-  })
-  
-}
-
-# plot the combined deg plots
-deg_combine_server <- function(id, datar, datam, datah) {
-  moduleServer(id, function(input, output, session){
-    df_rat = datar()
-    df_mouse = datam()
-    df_human = datah()
-    
-    g1 = ggplot(data = df_rat, aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
-      geom_point(aes(col=LFC, shape=sig, size=0.3)) + ggtitle("Rat") +
-      labs(shape = "", size = "") + facet_grid(.~Dataset, scale = "free", space='free')  +
-      guides(col = FALSE, shape = FALSE, sig=FALSE, size = FALSE) +
-      scale_colour_continuous(limits=c(0,1)) + scale_x_discrete(labels=subpopulation_labels) +
-      scale_colour_viridis_c(option = "viridis", end = .90) +
-      scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "")
-    
-    
-    g2 = ggplot(data = df_human, aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) + ggtitle("Human") +
-      geom_point(aes(col=LFC, shape=sig, size=0.3)) + facet_grid(.~Dataset, scale = "free", space='free') +
-      guides(col = FALSE, shape = FALSE, sig=FALSE, size = FALSE) + scale_x_discrete(labels=subpopulation_labels) +
-      scale_colour_continuous(limits=c(0,1)) +
-      scale_colour_viridis_c(option = "viridis", end = .90) +
-      scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "")
-    
-    g3 = ggplot(data = df_mouse, aes(x=interaction(Population), y = symbol, text = paste('padj: ',padj))) +
-      ggtitle("Mouse") + geom_point(aes(col=LFC, shape=sig, size=0.3)) +
-      facet_grid(.~Dataset, scale = "free", space='free') + scale_x_discrete(labels=subpopulation_labels) +
-      scale_colour_continuous(limits=c(0,1)) +
-      scale_colour_viridis_c(option = "viridis", end = .90) +
-      scale_shape_manual(values=c(1, 19)) + thc + labs(shape = "", size = "") + guides(size=FALSE)
-    
-    combine_degplot = plot_grid(g1,g2, g3,ncol=3, rel_widths = c(1/11,4/11,6/11))
-    
-    output$deg <- renderCachedPlot({combine_degplot},
-                                   cacheKeyExpr = {list(datar, datah, datam)})
-    return(combine_degplot)
-    
-    
-  })
-}
-
-plotcombine_server <- function(id, df, sex, genes) {
-  moduleServer(id, function(input, output, session) {
-    df_rat = df[df$Species == "Rat (DRG)",]
-    df_mouse = df[df$Species == "Mouse (DRG)",]
-    df_human = df[df$Species == "human",]
-    
-    g1 = ggplot(df_rat, aes(x= Population, y = symbol)) + scale_colour_viridis_c(option = "magma", end = .90) +
-      scale_fill_continuous(limits=c(-10,10)) + scale_size_continuous(limits=c(-10,10)) +
-      geom_point(aes(col=log(expression), size=log(expression))) + thc + guides(col = FALSE, size = FALSE) +
-      facet_grid(.~Dataset, scale = "free", space='free') + ggtitle("Rat") + scale_x_discrete(labels=population_labels)
-    g2 = ggplot(df_human, aes(x= Population, y = symbol)) + scale_colour_viridis_c(option = "magma", end = .90) +
-      scale_fill_continuous(limits=c(-10,10)) +
-      geom_point(aes(col=log(expression), size=log(expression))) + thc + guides(col = FALSE, size = FALSE) +
-      facet_grid(.~Dataset, scale = "free", space='free') + ggtitle("Human") + scale_x_discrete(labels=population_labels)
-    g3 = ggplot(df_mouse, aes(x= Population, y = symbol)) + scale_colour_viridis_c(option = "magma", end = .90) +
-      scale_fill_continuous(limits=c(-10,10)) +
-      geom_point(aes(col=log(expression), size=log(expression))) + thc + guides(size = FALSE) +
-      facet_grid(.~Dataset, scale = "free", space='free') + ggtitle("Mouse") +
-      scale_x_discrete(labels=population_labels) + labs(col="log(TPM)", size = "")
-    
-    plot = plot_grid(g1,g2, g3,ncol=3, rel_widths = c(1/11,4/11,6/11))
-    
-    if (sex == "Separate") {
-      g1 = g1 + facet_grid(.~Dataset+Sex, labeller = labeller(Sex = sexlabels), scale ="free",space='free')
-      g2 = g2 + facet_grid(.~Dataset+Sex, labeller = labeller(Sex = sexlabels), scale ="free",space='free')
-      g3 = g3 + facet_grid(.~Dataset+Sex, labeller = labeller(Sex = sexlabels), scale ="free",space='free')
-      plot = plot_grid(g1,g2, g3,ncol=3, rel_widths = c(1/11,4/11,6/11))
-    }
-    
-    output$dot <- renderCachedPlot({plot}, cacheKeyExpr = {list(df,genes)})
-    
-    return(plot)
-    
-  })
-}
-
-shinyscrna <- function(input, output, session,genes,pbmc, parent=NULL) {
-  
-  if (is.null(parent) == FALSE) {
-    observeEvent(input$link_to_home, {
-      newvalue <- "tabhome"
-      observe({
-        updateTabItems(session=parent, "tabs", newvalue)
-      })
-    })
-  }
-  
-  observe({
-    updateSelectizeInput(session,
-                         inputId = "scgeneid",
-                         label = NULL,
-                         choices = rownames(pbmc),
-                         server = TRUE,
-                         selected = "ATF3"
-    )
-  })
-  
-  observeEvent(input$load, {
-    hg = subset(human_gene_data, mgi_symbol %in% genes())$hgnc_symbol
-    dotplot = DotPlot(pbmc, features = hg) +
-      theme(axis.title = element_blank(),
-            axis.text.x = element_text(size=8, angle = 45, hjust= 1),
-            axis.text.y = element_text(size=8),
-            axis.ticks.x = element_blank(),
-            axis.ticks.y = element_blank(), legend.justification = c(0,0.3),
-            legend.title = element_text(size=10), legend.key.size = unit(0.4, "cm"))
-    output$scrna_dots <- renderPlot({
-      dotplot
-    })
-    
-    dimplot = DimPlot(pbmc,label=TRUE)
-    output$scrna_umap <- renderCachedPlot({dimplot}, cacheKeyExpr = {list(pbmc)})
-    
-    # download plots and tables in a zip file   
-    output$scrna_plots <- downloadHandler(
-      filename = function() {
-        paste("scrna_plots", "zip", sep=".")
-      },
-      
-      content = function(file){
-        # Set temporary working directory
-        owd <- setwd(tempdir())
-        on.exit(setwd(owd))
-        fs = c('dotplot.png', 'dimplot.png')
-        
-        # Save the plots 
-        ggsave('dotplot.png', plot = dotplot, width = 6, height = 6, dpi = 300, units = "in", device='png')
-        ggsave('dimplot.png', plot = dimplot, width = 6, height = 6, dpi = 300, units = "in", device='png')
-
-        # Zip them up
-        zip(file, fs)
-      }
-    )
-    
-  })
-  
-  observeEvent(input$scgeneid,{
-    output$scrna_feature <- renderPlotly({
-      FeaturePlot(pbmc, features = input$scgeneid)
-    })
-  })
-  
-}
-
-plothomescdot_server <- function(id, pbmc, genes) {
-  moduleServer(id, function(input, output, session) {
-    hg = subset(human_gene_data, mgi_symbol %in% genes)$hgnc_symbol
-    g = DotPlot(pbmc, features = hg) + thc + ggtitle("Human DRG subtypes", subtitle="Spatial-seq (Tavares-Ferreira 2021)")
-    output$home_scrna_dots <- renderCachedPlot({g}, cacheKeyExpr = {list(genes, pbmc)})
-    return(g)
-    
-  })
-}
-
-shinytab <- function(input, output, session, sex, count_df, colData, gene_data, species, paintype, genes,
-                     include_deg=FALSE, deg_df_list=NULL, pop_list=NULL, dataset=NULL, include_subtype=FALSE,
-                     injury_data = NULL,parent=NULL) {
-  if (is.null(parent) == FALSE) {
-    observeEvent(input$link_to_home, {
-      newvalue <- "tabhome"
-      observe({
-        updateTabItems(session=parent, "tabs", newvalue)
-      })
-    })
-  }
-  output$report <- downloadHandler(
-    
-    # For PDF output, change this to "report.pdf"
-    filename = "RNAseq_plot.html",
-    content = function(file) {
-      
-      if (species == 'mouse') {
-        gene_data = mouse_gene_data
-      }
-      if (species == "rat") {
-        gene_data = rat_gene_data
-      }
-      if (species == "human") {
-        gene_data = human_gene_data
-      }
-      
-      params <- list(matrix = count_df, colD = colData, species = species, paintype = paintype, genes = genes(), sex= sex, injury_data = injury_data, 
-                     include_deg = include_deg, deg_df_list = deg_df_list, pop_list = pop_list, gene_data = gene_data)
-      
-      shiny::withProgress(value = 0,
-                          message = 'Rendering plotting report',
-                          detail =  'This might take several minutes.',{
-                            rmarkdown::render(input = "report/RNAseq_plot.Rmd", 
-                                              params = params, 
-                                              output_file = file,
-                                              envir = new.env(parent = globalenv()))
-                          })
-      
-    }
-  )
-  
-  observeEvent(input$load, {
-    
-    if ('mgi_symbol' %in% colnames(count_df)) {
-      df = count_df[count_df[,'mgi_symbol'] %in% genes(),]
-      matfilt = subset(df, select=-c(symbol, mgi_symbol))
-    }
-    else{
-      df = count_df[count_df[,'symbol'] %in% genes(),]
-      matfilt = subset(df, select=-c(symbol))
-    }
-    tcounts <- t(matfilt) %>%
-      base::merge(colData, ., by="row.names") %>%
-      gather(gene, expression, (ncol(.)-nrow(matfilt)+1):(ncol(.)))
-    if (species == 'mouse') {
-      tcounts$symbol <- gene_data[tcounts$gene,]$mgi_symbol # add gene symbols for goi
-    }
-    if (species == "rat") {
-      tcounts$symbol <- gene_data[tcounts$gene,]$rgd_symbol
-    }
-    if (species == "human") {
-      tcounts$symbol <- gene_data[tcounts$gene,]$hgnc_symbol
-    }
-    
-    # for dotplot
-    ifelse(sex=="Both", tcounts_med <- tcounts %>% dplyr::group_by(Condition, Population, symbol, Dataset, Species) %>%
-             dplyr::summarise(expression=median(as.double(expression))), tcounts_med <- tcounts %>% dplyr::group_by(Condition, Population, symbol, Sex, Dataset, Species) %>%
-             dplyr::summarise(expression=median(as.double(expression))))
-    tcounts_med <- tcounts_med[!tcounts_med$Condition %in% paintype, ]
-    
-    dotplot = ggplot(data = tcounts_med, aes(x=Population, y = symbol)) +
-      scale_colour_viridis_c(option = "magma", end = .90) +
-      geom_point(aes(col=log(expression), size=log(expression))) + th +
-      facet_grid(.~Dataset, scales = "free", space="free") +
-      scale_x_discrete(labels=population_labels) + labs(col="log(TPM)", size = "")
-    
-    if (sex == "Separate") {
-      dotplot = dotplot + facet_wrap(~Sex, labeller = labeller(Sex = sexlabels), scales ="free_x")
-    }
-    
-    output$bulkseq_dots <- renderPlotly({dotplot})
-    
-    
-    # for line plot
-    if (is.null(injury_data) == FALSE) {
-      count_df = injury_data
-      if ('mgi_symbol' %in% colnames(count_df)) {
-        df = count_df[count_df[,'mgi_symbol'] %in% genes(),]
-        matfilt = subset(df, select=-c(symbol, mgi_symbol))
-      }
-      else{
-        df = count_df[count_df[,'symbol'] %in% genes(),]
-        matfilt = subset(df, select=-c(symbol))
-      }
-      tcounts <- t(matfilt) %>%
-        base::merge(colData, ., by="row.names") %>%
-        gather(gene, expression, (ncol(.)-nrow(matfilt)+1):(ncol(.)))
-      if (species == 'mouse') {
-        tcounts$symbol <- gene_data[tcounts$gene,]$mgi_symbol # add gene symbols for goi
-      }
-      if (species == "rat") {
-        tcounts$symbol <- gene_data[tcounts$gene,]$rgd_symbol
-      }
-      if (species == "human") {
-        tcounts$symbol <- gene_data[tcounts$gene,]$hgnc_symbol
-      }
-    }
-    
-    ifelse(sex=="Both", tcounts_m <- tcounts %>% dplyr::group_by(Condition, symbol, Timepoint, Dataset, Species) %>%
-             dplyr::summarise(expression=median(as.double(expression))),
-           tcounts_m <- tcounts %>% dplyr::group_by(Condition, symbol, Sex, Timepoint, Dataset, Species) %>%
-             dplyr::summarise(expression=median(as.double(expression))))
-    tcounts_m = tcounts_m[!tcounts_m$Condition %in% "Undetermined", ]
-    
-    lineplot = ggplot(data=tcounts_m, aes(x=Condition, y=expression, group=interaction(symbol, Timepoint))) +
-      scale_colour_viridis(discrete=TRUE, end = .80) +
-      geom_line(aes(color=symbol, linetype=Timepoint)) + geom_point(aes(col=symbol)) + theme_line + ylab("Expression") +
-      guides(linetype=guide_legend(label.hjust=0.5))
-    if (sex =='Separate'){
-      lineplot = lineplot + facet_wrap(~Sex, labeller = labeller(Sex = sexlabels), scales = "free_x") + labs(col="")
-    }
-    output$bulkseq_lines <- renderPlot({lineplot})
-    
-    # for subtype, optional
-    if (include_subtype == TRUE) {
-      ifelse(sex == "Both", tcounts_sub <- tcounts %>% dplyr::group_by(Condition, symbol, Timepoint, Population, Dataset, Species) %>%
-               dplyr::summarise(expression=median(as.double(expression))),
-             tcounts_sub <- tcounts %>% dplyr::group_by(Condition, symbol, Sex, Timepoint, Population, Dataset, Species) %>%
-               dplyr::summarise(expression=median(as.double(expression))))
-      
-      pop_num = n_distinct(tcounts_sub$Population)
-      subtypeplot =  ggplot(data=tcounts_sub, aes(x=Condition, y=expression, group=interaction(symbol, Timepoint))) +
-        scale_colour_viridis(discrete=TRUE, end = .80) +
-        geom_line(aes(col=symbol, linetype=Timepoint)) + geom_point(aes(col=symbol)) +
-        facet_wrap(~Population, ncol = pop_num, labeller=labeller(Population=population_labels))+
-        theme_line + ylab("Expression")
-      if (sex == "Separate") {
-        subtypeplot = subtypeplot + facet_grid(Sex~Population, labeller=labeller(Population=population_labels, Sex=sexlabels)) + labs(col="")
-      }
-      output$bulkseq_lines_subtype <- renderPlot({subtypeplot})
-    }
-    
-    # first, process data
-    if ('mgi_symbol' %in% colnames(count_df)) {
-      goi_df = count_df[count_df[,'mgi_symbol'] %in% genes(),]
-    }
-    else{
-      goi_df = count_df[count_df[,'symbol'] %in% genes(),]
-    }
-    
-    output$goi_table <- DT::renderDataTable({
-      datatable = goi_df
-      datatable$geneID <- rownames(datatable)
-      DT::datatable(
-        datatable,
-        rownames=datatable$symbol,
-        style="default",
-        class = 'nowrap',
-        options = list(scrollX = TRUE, pageLength = 5)
-      )
-    })
-    
-    
-    # plot deg plots
-    if (include_deg == TRUE) {
-      
-      geneids = genes()
-      if (species == "rat") {
-        geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$rgd_symbol
-      }
-      if (species == "human") {
-        geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$hgnc_symbol
-      }
-      
-      # generate deg df
-      i=1
-      final_df = data.frame()
-      for (df in deg_df_list) {
-        if ("hsymbol" %in% colnames(df)){
-          df$symbol = df$hsymbol
-        }
-        df = df[c("log2FoldChange", "padj", "symbol")]
-        colnames(df) = c("LFC","padj", "symbol")
-        df$Population = rep(pop_list[i], nrow(df))
-        final_df = rbind(final_df, df)
-        i=i+1
-      }
-      final_df = mutate(final_df, sig=ifelse(final_df$padj<0.05, "SIG", "NS"))
-      
-      deg <- reactive({
-        df <- final_df %>% filter(symbol %in% geneids)
-        return(df)
-      })
-      
-      # render contrast table
-      output$deg_table <- DT::renderDataTable({
-        DT::datatable(
-          deg(),
-          width = 12,
-          class = 'nowrap',
-          options = list(scrollX = TRUE, pageLength = 10)
-        )
-      })
-      
-      degplot = ggplot(data = deg(), aes(x=interaction(Population), y = symbol,
-                                         text = paste('padj: ',padj))) +
-        scale_colour_viridis_c(option = "viridis", end = .90) +
-        geom_point(aes(col=LFC, shape=sig, size=0.5)) + scale_shape_manual(values=c(1, 19)) +
-        th + labs(shape = "", size = "") + scale_x_discrete(labels=subpopulation_labels)
-      output$deg_plot <- renderPlotly({
-        degplot
-      })
-    }
-    
-    # download plots and tables in a zip file   
-    output$plots <- downloadHandler(
-      filename = function() {
-        paste("output", "zip", sep=".")
-      },
-      
-      content = function(file){
-        # Set temporary working directory
-        owd <- setwd(tempdir())
-        on.exit(setwd(owd))
-        fs = c('dotplot.png','lineplot.png')
-        
-        # Save the plots 
-        ggsave('dotplot.png', plot = dotplot, width = 6, height = 6, dpi = 300, units = "in", device='png')
-        ggsave('lineplot.png', plot = lineplot, width = 6, height = 6, dpi = 300, units = "in", device='png')
-        if (include_subtype == TRUE){
-          ggsave("subtype.png", plot=subtypeplot, width = 12, height = 6, dpi = 300, units = "in", device='png')
-          fs = c(fs, "subtype.png")
-        }
-        if(include_deg == TRUE){
-          ggsave("degplot.png", plot=degplot, width = 6, height = 6, dpi = 300, units = "in", device='png')
-          fs = c(fs, "degplot.png")
-        }
-        
-        # csv files for data 
-        write.csv(goi_df,"result_table.csv", row.names = FALSE, col.names = TRUE)
-        
-        # for deg result table 
-        if (include_deg == TRUE){
-          write.csv(deg(),"deg_table.csv", row.names = FALSE, col.names = TRUE)
-        }
-        
-        fs = c(fs, "result_table.csv")
-        fs = c(fs, "deg_table.csv")
-        # Zip them up
-        zip(file, fs)
-      }
-    )
-    
-  })
-  
-  if (include_deg == TRUE){
-    # for volcano
-    generate_dict = function(names, dfs) {
-      d = dict()
-      for (i in c(1:length(names))) {
-        d[[names[i]]] = dfs[i]
-      }
-      return(d)
-    }
-    
-    pop_df_dic = generate_dict(pop_list, deg_df_list)
-    
-    # ploting volcano plots
-    observeEvent(input$plotvolc, {
-
-      geneids = genes()
-      if (species == "rat") {
-        geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$rgd_symbol
-      }
-      if (species == "human") {
-        geneids <- gene_data[gene_data$mgi_symbol %in% genes(),]$hgnc_symbol
-      }
-
-      res = as.data.frame(pop_df_dic[[input$volc_pop]])
-      res = mutate(res, log10fdr = -log10(padj))
-      df = res
-
-      output$volcanoplot <- renderCachedPlot({
-        il_genes <- df %>% filter(symbol %in% geneids)
-        ggplot(data = df, aes(x = log2FoldChange, y = log10fdr)) +
-          geom_point(colour = "grey", alpha = 0.5) +
-          geom_point(data = il_genes, # New layer containing data subset il_genes
-                     size = 2,
-                     shape = 21,
-                     fill = "firebrick",
-                     colour = "black") +
-          geom_hline(yintercept = -log10(0.05),
-                     linetype = "dashed") +
-          geom_vline(xintercept = c(log2(0.5), log2(2)),
-                     linetype = "dashed") +
-          geom_label_repel(data = il_genes,
-                           aes(label = symbol),
-                           force = 2,
-                           nudge_y = 1) +
-          scale_colour_manual(values = cols) +
-          scale_x_continuous(breaks = c(seq(-10, 10, 2)),
-                             limits = c(-10, 10)) + theme_line +
-          labs(y="-log10(FDR)")}, 
-        cacheKeyExpr = {list(df, genes())})
-    })
-    
-    # for contrast table!
-    usercontrast <- reactive({
-      res = as.data.frame(pop_df_dic[[input$contrast]])
-      return(res)
-    }) %>% bindCache(input$contrast)
-    
-    # render contrast table
-    output$contrast_table <- DT::renderDataTable({
-      DT::datatable(
-        usercontrast(),
-        width = 12,
-        class = 'nowrap',
-        options = list(scrollX = TRUE, pageLength = 10)
-      )
-    })
-  }
-}
-
+source("functions.R")
 
 
 ################################################ SERVER ##############################################################################
+#' The application server-side
+#' 
+#' @param input,output,session Internal parameters for {shiny}. 
+#'     DO NOT REMOVE.
+#' @import shiny
 shinyServer(function(input, output, session) {
   
-  pbmc = readRDS(scRNA_dir)
-  options(shiny.maxRequestSize=60*1024^2)
-  # res_auth <- secure_server(check_credentials = check_credentials(credentials))
   
-  # select genes
-  updateSelectizeInput(session,
-                       inputId = "geneid",
-                       label = "Search Genes:",
-                       choices = TPM_subtype[,80],
-                       server = TRUE,
-                       selected = c("Trpv1", "Scn10a","Atf3")
+  
+  # for RData
+  {
+    # load(data_dir)
+    # load(gene_dir)
+    # allgenes = GeneData[["genebank"]]$all_genes
+  }
+  
+  
+  # For Database
+  {
+    conn <- dbConnect(RSQLite::SQLite(), "test.db")
+
+    if (attempt::is_try_error(conn)){
+      # Notify the user
+      send_notification("Could not connect")
+    } else {
+      # Continue computing if the connection was successful
+      human_gene_data = dbReadTable(conn, "human_gene_data")
+      mouse_gene_data = dbReadTable(conn, "mouse_gene_data")
+      rat_gene_data = dbReadTable(conn, "rat_gene_data")
+    }
+    allgenes = as.data.frame(dbReadTable(conn, "genebank"))$all_genes
+  }
+ 
+  
+  
+  bulk_df = des_df[des_df$type == "bulk",]
+  
+  output$shinypages  = shiny::renderUI({
+    j = input$dataset_table_rows_selected
+    if (is.null(j) == FALSE) {
+      select = des_df[j,]
+      
+      if (select$type == "single"){
+        shinyscrnapageUI("spatpage", "Human DRG spatial-seq", des_dir="des/spatial.Rhtml")
+      }
+      
+      else {
+        name = select$Name
+        des_dir = paste("des/",select$Name, ".Rhtml", sep = "")
+        shinypageUI(name, select$Dataset,
+                    select$include_degs,
+                    include_subtype = select$include_subtypes, des_dir = des_dir, includegoi = select$include_gois, 
+                    include_count = select$include_count)
+      }
+    }
+    
+
+  })
+  
+  variables = reactiveValues(
+    pbmc = NULL,
+    indrows = NULL,
+    option = NULL
   )
   
-  # get a list of genes, separated by comma
-  updateTextInput(session,
-                  inputId = "genes",
-                  label = "Search Genes:"
+  load(network_dir)
+  
+  if (scRNA_dir != ""){
+    variables$pbmc = readRDS(scRNA_dir) # the scRNA data
+  }
+  
+  
+  # read col_lists 
+
+  ## for RData
+  {
+    # col_list = Seq_Data[[2]]
+  }
+  
+  
+  
+  ## for Database
+  {
+    col_list <- vector(mode = "list", nrow(des_df))
+    names(col_list) = des_df$colDatas
+
+    for (i in c(1:nrow(des_df))) {
+      row = des_df[i,]
+      cd = row$colDatas
+      ds_name = row$Dataset
+
+      if (cd != ""){
+        colD = dbReadTable(conn, cd)
+        rownames(colD) = colD$row_names
+        colD = colD[,-1] # remove the first col
+        colD$Dataset = rep(ds_name, nrow(colD))
+
+        if (!"Population" %in% colnames(colD)){
+          colD$Population = rep(ds_name, nrow(colD))
+        }
+
+        if (!"Sex" %in% colnames(colD)) {
+          colD$Sex = rep("mixed", nrow(colD))
+        }
+
+        if (!"Species" %in% colnames(colD)) {
+          colD$Species = rep(row$species, nrow(colD))
+        }
+
+        col_list[[i]] = colD
+
+      }
+
+    }
+
+    col_list = Filter(Negate(is.null), col_list) # remove null values
+  }
+  
+  
+  # gene search bar
+  shiny::updateSelectizeInput(session,
+                              inputId = "geneid",
+                              label = "Search Genes:",
+                              choices = allgenes,
+                              server = TRUE,
+                              selected = c("Trpv1", "Scn10a","Atf3")
   )
   
-  # linking to datasets
-  observeEvent(input$linksubtype, {
-    newvalue = "tabsubtype"
-    updateTabItems(session, "tabs", newvalue)
+  # change to the plotting 
+  shiny::observeEvent(input$metaa, {
+    
+    Newtab <- switch(input$tabs,
+                     "tabhome" = "tabmeta"
+                     
+    )
+    
+    # if length(col_list) != 0, then the data loading has finished
+    if (length(col_list) != 0) {
+      shinydashboard::updateTabItems(session, "tabs", Newtab) 
+    }
+    
   })
   
-  ### linking to other tabs
-  observeEvent(input$linkmouse, {
-    newvalue <- "tabmouse"
-    updateTabItems(session, "tabs", newvalue)
+  
+  observeEvent(input$citation, {
+    newvalue <- "tabcode"
+    observe({
+      updateTabItems(session, "tabs", newvalue)
+    })
   })
   
-  observeEvent(input$linkrat, {
-    newvalue <- "tabrat"
-    updateTabItems(session, "tabs", newvalue)
+  
+  
+  # change to the plotting 
+  shiny::observeEvent(input$inda, {
+    
+    Newtab <- switch(input$tabs,
+                     "tabhome" = "tabdata"
+                     
+    )
+    if (length(col_list) != 0) {
+      shinydashboard::updateTabItems(session, "tabs", Newtab) 
+    }
+    
   })
   
-  observeEvent(input$linkscrna, {
-    newvalue <- "tabspat"
-    updateTabItems(session, "tabs", newvalue)
+  # change to the plotting 
+  shiny::observeEvent(input$neta, {
+    
+    Newtab <- switch(input$tabs,
+                     "tabhome" = "tabnet"
+                     
+    )
+    if (length(col_list) != 0) {
+      shinydashboard::updateTabItems(session, "tabs", Newtab) 
+    }
+    
   })
-  
-  observeEvent(input$linkipsc, {
-    newvalue <- "tabhuman"
-    updateTabItems(session, "tabs", newvalue)
-  })
-  
-  observeEvent(input$linkhdrg, {
-    newvalue <- "tabhdrg"
-    updateTabItems(session, "tabs", newvalue)
-  })
-  
-  observeEvent(input$linkzheng, {
-    newvalue <- "tabzheng"
-    updateTabItems(session, "tabs", newvalue)
-  })
-  
-  observeEvent(input$linkdb, {
-    newvalue <- "tabdb"
-    updateTabItems(session, "tabs", newvalue)
-  })
-  
-  observeEvent(input$linkcts, {
-    newvalue <- "tabcts"
-    updateTabItems(session, "tabs", newvalue)
-  })
-  
-  # data preprocessing for deg plots
-  mouse_deg_df = generate_degdf(list(b10d2, balb), c("b10d2", "balb"), "Mouse DRG")
-  rat_deg_df = generate_degdf(list(ratdrg), c("DRG"), "Rat DRG")
-  human_deg_df = generate_degdf(list(young, old), c("young", "old"), "iPSC HSN1")
-  db_deg_df = generate_degdf(list(DB, DB_female, DB_male), c("Diabetes", "Diabetes_male","Diabetes_female"), "DPN (Skin)")
-  cts_deg_df = generate_degdf(list(HS), c("skin"), "CTS (Skin)")
-  
-  subpopulations_df = list(TDNV_3D,TDNV_4W,CGRT_3D,CGRT_4W,MRTD_3D, MRTD_4W,CRTH_3D,CRTH_4W,TBAC_3D,TBAC_4W)
-  labels = c("Nociceptors 3D","Nociceptors 4W","PEP 3D","PEP 4W","NP 3D","NP 4W","C-LTMR 3D",
-             "C-LTMR 4W","Ad- AB-RA LTMRs 3D","Ad- AB-RA LTMRs 4W")
-  
-  subtype_deg_df = generate_degdf(subpopulations_df, labels, "Subtype DRG (Barry)")
-  subtype_deg_df = subtype_deg_df[c("LFC", "padj", "symbol", "Population","Dataset", "sig")]
-  
-  mouse_all_deg_df = rbind(mouse_deg_df, subtype_deg_df)
-  human_all_deg_df = rbind(human_deg_df, db_deg_df, cts_deg_df)
-  combined_deg_df = rbind(mouse_all_deg_df, rat_deg_df, human_all_deg_df)
   
   # a reactive variable that records whether a file is uploaded.
   rv <- reactiveValues(
@@ -689,17 +225,18 @@ shinyServer(function(input, output, session) {
     data = FALSE
   )
   
-  observeEvent(input$file, {
+  shiny::observeEvent(input$file, {
     rv$clear <- FALSE
     rv$data = TRUE
   }, priority = 1000)
   
-  observeEvent(input$reset, {
+  # clear the file space when files are removed
+  shiny::observeEvent(input$reset, {
     rv$clear = TRUE
     rv$data = FALSE
   })
   
-  # first, process data
+  # read into gene ids from files
   file_input <- reactive({
     if (rv$clear == TRUE) {
       return(NULL)
@@ -707,7 +244,7 @@ shinyServer(function(input, output, session) {
     if(rv$clear==FALSE && rv$data == TRUE) {
       goi = read.table(input$file$datapath)
       rownames(goi) <- goi[,1]
-      goi <- goi[which(rownames(goi) %in% TPM_subtype[,80]==TRUE),]
+      goi <- goi[which(rownames(goi) %in% allgenes==TRUE),]
       return(goi)}
   })
   
@@ -720,6 +257,7 @@ shinyServer(function(input, output, session) {
     }
   })
   
+  
   # plot homepage plots
   observeEvent(input$load, {
     
@@ -730,7 +268,7 @@ shinyServer(function(input, output, session) {
       if(rv$clear==FALSE && rv$data == TRUE) {
         goi = read.table(input$file$datapath)
         rownames(goi) <- goi[,1]
-        goi <- goi[which(rownames(goi) %in% TPM_subtype[,80]==TRUE),]
+        goi <- goi[which(rownames(goi) %in% allgenes==TRUE),]
         return(goi)}
     })
     
@@ -741,30 +279,94 @@ shinyServer(function(input, output, session) {
       genes = file_input()
     }
     
-    final_df = generate_combine_dataset(df_list, genes, input$sex, col_list, pain_list, species_list)
-    combine_dot = plotcombine_server("dot", final_df, input$sex, genes) #dotplot
-    scrna_dot = plothomescdot_server("homespat", pbmc, genes)
+    # retrieve count data of selected datasets 
     
-    degr <- reactive({
-      rg = subset(rat_gene_data, mgi_symbol %in% genes)$rgd_symbol
-      df <- rat_deg_df %>% filter(symbol %in% rg)
-      return(df)
-    }) %>% bindCache(genes)
+    # for database
+    {
+      df_list = vector(mode = "list", nrow(bulk_df))
+      names(df_list) = bulk_df$colDatas
     
-    degm <- reactive({
-      df <- mouse_all_deg_df %>% filter(symbol %in% genes)
-      return(df)
-    }) %>% bindCache(genes)
+      selected_data = c(1:nrow(bulk_df))
+      
+      # selected_data = input$meta_table_selected_rows
+      for (i in selected_data){
+        curr = bulk_df[i,]
+        d = curr$count
+        if (d!=""){
+          if (curr$Species == "human"){
+            sql = paste("SELECT * FROM", d, "WHERE mgi_symbol = ?")
+          }
+          else {
+            sql = paste("SELECT * FROM", d, "WHERE symbol = ?")
+          }
+          count_data = as.data.frame(dbGetPreparedQuery(conn, sql, bind.data=data.frame(symbol=genes)))
+          df_list[[i]] = count_data
+        }
+      }
+      df_list = Filter(Negate(is.null), df_list)
+    }
     
-    degh <- reactive({
-      hg = subset(human_gene_data, mgi_symbol %in% genes)$hgnc_symbol
-      df <- human_all_deg_df %>% filter(symbol %in% hg)
-      return(df)
-    }) %>% bindCache(genes)
+    # for RData
+    {
+      # df_list = list()
+      # for (i in c(1:nrow(bulk_df))){
+      #   curr = bulk_df[i,]
+      #   count_data = Seq_Data[[1]][[curr$count]]
+      #   if (curr$Species == "human"){
+      #     count_data = count_data[count_data$mgi_symbol %in% genes,]
+      #   }
+      #   else {
+      #     count_data = count_data[count_data$symbol %in% genes,]
+      #   }
+      #   X = rownames(count_data)
+      #   count_data = cbind(X, count_data)
+      #   df_list[[curr$colDatas]] = count_data
+      # }
+    }
+
+    # generate a combined data frame containing count data from all datasets
+    final_df = generate_combine_dataset(df_list, genes, input$sex, col_list, bulk_df$pain[selected_data], bulk_df$Species[selected_data], 
+                                        expression, Condition, Population, symbol, Dataset, Species)
     
-    combine_degplot = deg_combine_server("deg_plot", reactive({degr()}), reactive({degm()}), reactive({degh()}))
     
-    # download all plots into a zip 
+    
+    combine_dot = plotcombine_server("dot", final_df, input$sex, genes, Population, symbol, expression, "Dataset") #dotplot
+    
+    if (is.null(variables$pbmc) != TRUE){
+      scrna_dot = plothomescdot_server("homespat", variables$pbmc, genes)
+    }
+    
+    
+    # query deg_dfs
+    
+    ## for Database 
+    {
+      degm = RSQLite::dbGetPreparedQuery(conn, "SELECT * FROM mouse_all_deg_df WHERE symbol = ?", bind.data=data.frame(symbol=genes))
+      sql = "SELECT * FROM rat_gene_data WHERE mgi_symbol = ?"
+      rg = as.data.frame(dbGetPreparedQuery(conn, sql, bind.data=data.frame(mgi_symbol= genes)))$rgd_symbol
+      degr = RSQLite::dbGetPreparedQuery(conn, "SELECT * FROM rat_deg_df WHERE symbol = ?", bind.data=data.frame(symbol=rg))
+      sql = "SELECT * FROM human_gene_data WHERE mgi_symbol = ?"
+      hg = as.data.frame(dbGetPreparedQuery(conn, sql, bind.data=data.frame(mgi_symbol= genes)))$hgnc_symbol
+      degh = RSQLite::dbGetPreparedQuery(conn, "SELECT * FROM human_deg_df WHERE symbol = ?", bind.data=data.frame(symbol=hg))
+    }
+   
+    
+    ## for RData
+    {
+      # mouse_degdf = Seq_Data[[3]][["mouse_all_deg_df"]]
+      # human_degdf = Seq_Data[[3]][["human_all_deg_df"]]
+      # rat_degdf = Seq_Data[[3]][["rat_all_deg_df"]]
+      # 
+      # rg = rat_gene_data[rat_gene_data$mgi_symbol %in% genes,]$rgd_symbol
+      # hg = human_gene_data[human_gene_data$mgi_symbol %in% genes,]$hgnc_symbol
+      # degm = mouse_degdf[mouse_degdf$symbol %in% genes,]
+      # degr = rat_degdf[rat_degdf$symbol %in% rg,]
+      # degh = human_degdf[human_degdf$symbol %in% hg,]
+    }
+   
+    combine_degplot = deg_combine_server("deg_plot",degr, degm, degh, Population,symbol, log2FoldChange,sig, "Dataset")
+    
+    # download all plots into a zip
     output$combineplots <- downloadHandler(
       filename = function() {
         paste("combined", "zip", sep=".")
@@ -776,120 +378,411 @@ shinyServer(function(input, output, session) {
         on.exit(setwd(owd))
         fs = c()
         
-        # Save the plots 
+        # Save the plots
         ggsave('combine_deg.png', plot = combine_degplot, width = 14, height = 6, dpi = 300, units = "in", device='png')
         ggsave('combine_dot.png', plot = combine_dot, width = 14, height = 6, dpi = 300, units = "in", device='png')
         ggsave('scrna_dot.png', plot = scrna_dot, width = 10, height = 8, dpi = 300, units = "in", device='png')
         fs = c(fs, 'combine_deg.png')
         fs = c(fs, 'combine_dot.png')
         fs = c(fs, 'scrna_dot.png')
+        
+        # csv files for gene count data
+        write.csv(final_df,"result_table.csv", row.names = FALSE, col.names = TRUE)
+        
+        fs = c(fs, "result_table.csv")
+        
         zip(file, fs)
       }
     )
     
+    
+    output$combineplot <- downloadHandler(
+      filename = "RNAseq_homeplot.html",
+      content = function(file) {
+        
+        params <- list(matrix = final_df, genes = genes, sex = input$sex, scRNA = variables$pbmc, ratdeg = degr,
+                       mousedeg = degm, humandeg = degh,
+                       human_gene_data = human_gene_data)
+        
+        shiny::withProgress(value = 0,
+                            message = 'Rendering plotting report',
+                            detail =  'This might take several minutes.',{
+                              rmarkdown::render(input = "reports/combineplot.Rmd",
+                                                params = params,
+                                                output_file = file,
+                                                envir = new.env(parent = globalenv()))
+                            })
+        
+      }
+    ) # closure for download handler
+    
+    
+  }) # closure for input$load
+  
+  output$meta_table = DT::renderDataTable({
+    DT::datatable(
+      bulk_df[c("Dataset", "Pain_Model", "Species", "Tissue")],
+      width = 6,
+      class = 'nowrap',
+      options = list(scrollX = TRUE, scrollY = TRUE, pageLength = 5), 
+      selection = "none"
+      # selection = list(mode = "multiple", selected = c(1:nrow(bulk_df)), target = "row")
+    )
   })
   
-  output$combineplot <- downloadHandler(
+  ############### Pain Networks ####################################################
+  # select genes
+  shiny::updateSelectizeInput(session,
+                              inputId = "gene_symbols",
+                              label = "Search Genes:",
+                              choices = human_gene_data$hgnc_symbol,
+                              server = TRUE,
+                              selected = c("ADCYAP1")
+  )
+  
+  observeEvent(input$submit, {
+    # Query gene interactions
+    genes_list = as.vector(input$gene_symbols)
+    genes = paste(genes_list, collapse = "%0d")
+    interactions <- query_interactions(genes, 15)
+    proteins = unique(c(unique(interactions$preferredName_A), unique(interactions$preferredName_B)))
+    nodes = data.frame()
+    id = unique(c(unique(interactions$stringId_A), unique(interactions$stringId_B)))
+    nodes= as.data.frame(id)
+    nodes$label = proteins
     
-    # For PDF output, change this to "report.pdf"
-    filename = "RNAseq_homeplot.html",
-    content = function(file) {
-      # data pre-processing 
-      file_input <- reactive({
-        if (rv$clear == TRUE) {
-          return(NULL)
-        }
-        if(rv$clear==FALSE && rv$data == TRUE) {
-          goi = read.table(input$file$datapath)
-          rownames(goi) <- goi[,1]
-          goi <- goi[which(rownames(goi) %in% TPM_subtype[,80]==TRUE),]
-          return(goi)}
+    
+    if (input$pop == "Composite LFC") {
+      mode = "meta"
+      metrics = score_df
+      dt = score_df[score_df$symbol %in% proteins,]
+      tit = "CLFC" # title for legend
+      
+      output$netlegend = renderUI({
+        HTML(paste0(
+          "<br><br>",
+          "<p style = 'display: block; margin-left: 40px; margin-right: auto;'>&emsp;&emsp;&emsp;PES</p>
+                      <img style = 'display: block; margin-left: auto; margin-right: auto;' src='CES.png' width = '50' height = '180'>
+                      ",
+          "<br>")
+        )
       })
-      
-      if (is.null(file_input())) {
-        genes = input$geneid
-      }
-      else {
-        genes = file_input()
-      }
-      
-      final_df = generate_combine_dataset(df_list, genes, input$sex, col_list, pain_list, species_list)
-      
-      degr <- reactive({
-        rg = subset(rat_gene_data, mgi_symbol %in% genes)$rgd_symbol
-        df <- rat_deg_df %>% filter(symbol %in% rg)
-        return(df)
-      }) %>% bindCache(genes)
-      
-      degm <- reactive({
-        df <- mouse_all_deg_df %>% filter(symbol %in% genes)
-        return(df)
-      }) %>% bindCache(genes)
-      
-      degh <- reactive({
-        hg = subset(human_gene_data, mgi_symbol %in% genes)$hgnc_symbol
-        df <- human_all_deg_df %>% filter(symbol %in% hg)
-        return(df)
-      }) %>% bindCache(genes)
-      
-      params <- list(matrix = final_df, genes = genes, sex = input$sex, scRNA = pbmc, ratdeg = reactive({degr()}),
-                     mousedeg = reactive({degm()}), humandeg = reactive({degh()}), 
-                     human_gene_data = human_gene_data)
-      
-      shiny::withProgress(value = 0,
-                          message = 'Rendering plotting report',
-                          detail =  'This might take several minutes.',{
-                            rmarkdown::render(input = "report/combineplot.Rmd", 
-                                              params = params, 
-                                              output_file = file,
-                                              envir = new.env(parent = globalenv()))
-                          })
-      
     }
-  )
+    
+    else if (input$pop == "Predicted Pain Score") {
+      mode = "pes"
+      metrics = pain_score
+      dt = pain_score[pain_score$symbol %in% proteins,]
+      tit = "PPS" # title for legend
+      
+      output$netlegend = renderUI({
+        HTML(paste0(
+          "<br><br>",
+          "<p style = 'display: block; margin-left: 40px; margin-right: auto;'>&emsp;&emsp;&emsp;PES</p>
+                      <img style = 'display: block; margin-left: auto; margin-right: auto;' src='CES.png' width = '50' height = '180'>
+                      ",
+          "<br>")
+        )
+      })
+    }
+    
+    else {
+      mode = "indiv"
+      # the dict contains deg_df based on the name of datasets
+      
+      res = network_df[network_df$experiment_id == input$pop,]
+      res = mutate(res, sig=ifelse((res$padj<0.05), "SIG", "NS"))
+      metrics = res
+      dt = filter(res, symbol %in% proteins)  # this means the proteins must be in human symbol
+      rownames(dt) = dt$symbol
+      dt = dt[c("log2FoldChange","padj", "sig")]
+      tit = "log2FoldChange"
+      
+      output$netlegend = renderUI({
+        HTML(paste0(
+          "<br><br>",
+          "<p style = 'display: block; margin-left: 40px; margin-right: auto;'>&emsp;&emsp;&emsp;LFC</p>
+                      <img style = 'display: block; margin-left: auto; margin-right: auto;' src='CES.png' width = '50' height = '180'>
+                      ",
+          "<br>")
+        )
+      })
+    }
+    
+    
+    
+    # network construction
+    nodes = get_nodes(interactions, genes_list, metrics, mode=mode, snps, pg1, pg2)
+    edges <- data.frame(from = interactions$stringId_A, to = interactions$stringId_B, width = interactions$score,
+                        color = "#444444")
+    
+    lnodes <- data.frame(shape = c( "icon"), 
+                         icon.color = c("#961252", "#d8aec4ff", "lightgrey", "#aed5eaff","#0277bd"),
+                         icon.code  = c("f35b", "f111", "f111", "f111", "f358"),
+                         icon.size = 30) 
+    
+    # network visualisation
+    nw = visNetwork::visNetwork(nodes, edges, height = "500px", width = "100%") %>%
+      visPhysics(enabled = FALSE,solver = "forceAtlas2Based",
+                 forceAtlas2Based = list(avoidOverlap = 1)) %>%
+      visEdges(smooth = FALSE) %>%
+      visInteraction(navigationButtons = TRUE, zoomSpeed = 0.6) %>%
+      visLegend(addNodes = lnodes, 
+                #main = list(text = "Enrichment", style = "font-family:Gadugi"),
+                useGroups = FALSE, 
+                width = 0.2, 
+                position = "right",
+                ncol = 1,
+                stepY = 50,
+                #stepX = 50,
+                zoom = FALSE)
+    output$network <- renderVisNetwork({nw})
+    
+    output$downloadnet <- downloadHandler(
+      filename = "graph.html",
+      content = function(file) {
+        visSave(nw, file)
+      }
+    )
+    
+    
+    output$contrast_table <- DT::renderDataTable({a
+      DT::datatable(
+        dt,
+        width = 6,
+        class = 'nowrap',
+        options = list(scrollX = TRUE, pageLength = 8)
+      )
+    })
+    
+    # a table containing description and information of genes included
+    output$protein_table <- DT::renderDataTable({
+      DT::datatable(
+        query_information(proteins),
+        width = 6,
+        class = "wrap",
+        options = list(scrollX = TRUE, pageLength = 8)
+      )
+    })
+    
+  })
+  ##################################################################################################
   
   
   
-  callModule(shinytab, "subtypetab", input$sex, TPM_subtype, bulkseq_colData,mouse_gene_data,
-             "mouse", "ipsi", reactive({genes()}), include_deg = TRUE, list(TDNV_3D, TDNV_4W, CGRT_3D, CGRT_4W,
-                                                                                 MRTD_3D, MRTD_4W, CRTH_3D, CRTH_4W, TBAC_3D,
-                                                                                 TBAC_4W),
-             pop_list = c("Nociceptors 3D","Nociceptors 4W","PEP 3D","PEP 4W","NP 3D",
-                          "NP 4W", "C-LTMR 3D","C-LTMR 4W","Ad- AB-RA LTMRs 3D",
-                          "Ad- AB-RA LTMRs 4W"), dataset = "Subtype DRG(Barry)", include_subtype = TRUE,injury_data = bulkseq_mat, parent = session)
   
-  callModule(shinytab, "mousetab", input$sex, TPM_mouse, TPM_mouse_colData, mouse_gene_data,
-             "mouse", "SNI", reactive({genes()}), include_deg = TRUE,
-             list(b10d2, balb), pop_list = c("B10D2", "BALB"), dataset = "Bulk DRG (Mouse)",
-             include_subtype = FALSE,parent = session)
   
-  callModule(shinytab, "rattab", input$sex, TPM_rat, TPM_rat_colData, rat_gene_data,
-             "rat", "SNT", reactive({genes()}), include_deg = TRUE,
-             list(ratdrg), pop_list = c("rat"), dataset = "Bulk DRG (Rat)",
-             include_subtype = FALSE, parent = session)
   
-  callModule(shinytab, "ipsctab", input$sex, TPM_ipsc, ipsc_colData, human_gene_data,
-             "human", "patient", reactive({genes()}), include_deg = TRUE,
-             list(young, old), pop_list = c("iPSCDN_young","iPSCDN_old"), dataset = "iPSC DSN",
-             include_subtype = FALSE, parent = session)
   
-  callModule(shinytab, "dbtab", input$sex, TPM_HS_diabetes, db_colData, human_gene_data,
-             "human", "PDPN", reactive({genes()}), include_deg = TRUE,
-             list(DB, DB_female, DB_male), pop_list = c("Diabetes_skin","Diabetes_skin_females",
-                                                        "Diabetes_skin_male"), dataset = "Diabetes",
-             include_subtype = FALSE, parent = session)
+  # 
+  # ############### Pain Networks ####################################################
+  # # select genes
+  # shiny::updateSelectizeInput(session,
+  #                             inputId = "gene_symbols",
+  #                             label = "Search Genes:",
+  #                             choices = human_gene_data$hgnc_symbol,
+  #                             server = TRUE,
+  #                             selected = c("GRIN1", "LYN", "KCND2")
+  # )
+  # 
+  # observeEvent(input$submit, {
+  #   # Query gene interactions
+  #   genes_list = as.vector(input$gene_symbols)
+  #   genes = paste(genes_list, collapse = "%0d")
+  #   interactions <- query_interactions(genes, 15)
+  #   proteins = unique(c(unique(interactions$preferredName_A), unique(interactions$preferredName_B)))
+  #   nodes = data.frame()
+  #   id = unique(c(unique(interactions$stringId_A), unique(interactions$stringId_B)))
+  #   nodes= as.data.frame(id)
+  #   nodes$label = proteins
+  #   
+  # 
+  #   if (input$pop == "Predicted Pain Score") {
+  #     mode = "meta"
+  #     metrics = pain_score
+  #     dt = pain_score[pain_score$symbol %in% proteins,]
+  #     tit = "PPS" # title for legend
+  #     
+  #     output$netlegend = renderUI({
+  #       HTML(paste0(
+  #         "<br><br>",
+  #         "<p style = 'display: block; margin-left: 40px; margin-right: auto;'>&emsp;&emsp;&emsp;PES</p>
+  #                     <img style = 'display: block; margin-left: auto; margin-right: auto;' src='CES.png' width = '50' height = '180'>
+  #                     ",
+  #         "<br>")
+  #       )
+  #     })
+  #   }
+  #   
+  #   else if (input$pop == "Composite LFC") {
+  #     mode = "comp"
+  #     metrics = score_df
+  #     dt = score_df[score_df$symbol %in% proteins,]
+  #     tit = "Composite LFC" # title for legend
+  #     
+  #     output$netlegend = renderUI({
+  #       HTML(paste0(
+  #         "<br><br>",
+  #         "<p style = 'display: block; margin-left: 40px; margin-right: auto;'>&emsp;&emsp;&emsp;PES</p>
+  #                     <img style = 'display: block; margin-left: auto; margin-right: auto;' src='CES.png' width = '50' height = '180'>
+  #                     ",
+  #         "<br>")
+  #       )
+  #     })
+  #   }
+  #   
+  #   else {
+  #     mode = "indiv"
+  #     # the dict contains deg_df based on the name of datasets
+  #     
+  #     res = network_df[network_df$experiment_id == input$pop,]
+  #     res = mutate(res, sig=ifelse((res$padj<0.05), "SIG", "NS"))
+  #     metrics = res
+  #     dt = filter(res, symbol %in% proteins)  # this means the proteins must be in human symbol
+  #     rownames(dt) = dt$symbol
+  #     dt = dt[c("log2FoldChange","padj", "sig")]
+  #     tit = "log2FoldChange"
+  #     
+  #     output$netlegend = renderUI({
+  #       HTML(paste0(
+  #         "<br><br>",
+  #         "<p style = 'display: block; margin-left: 40px; margin-right: auto;'>&emsp;&emsp;&emsp;LFC</p>
+  #                     <img style = 'display: block; margin-left: auto; margin-right: auto;' src='CES.png' width = '50' height = '180'>
+  #                     ",
+  #         "<br>")
+  #       )
+  #     })
+  #   }
+  #   
+  #   
+  #   
+  #   # network construction
+  #   nodes = get_nodes(interactions, genes_list, metrics, mode=mode, snps, pg1, pg2)
+  #   edges <- data.frame(from = interactions$stringId_A, to = interactions$stringId_B, width = interactions$score,
+  #                       color = "#444444")
+  #   
+  #   lnodes <- data.frame(shape = c( "icon"), 
+  #                        icon.color = c("#961252", "#d8aec4ff", "lightgrey", "#aed5eaff","#0277bd"),
+  #                        icon.code  = c("f35b", "f111", "f111", "f111", "f358"),
+  #                        icon.size = 30) 
+  # 
+  #   # network visualisation
+  #   nw = visNetwork::visNetwork(nodes, edges, height = "500px", width = "100%") %>%
+  #     visPhysics(enabled = FALSE,solver = "forceAtlas2Based",
+  #                forceAtlas2Based = list(avoidOverlap = 1)) %>%
+  #     visEdges(smooth = FALSE) %>%
+  #     visInteraction(navigationButtons = TRUE, zoomSpeed = 0.6) %>%
+  #     visLegend(addNodes = lnodes, 
+  #               #main = list(text = "Enrichment", style = "font-family:Gadugi"),
+  #               useGroups = FALSE, 
+  #               width = 0.2, 
+  #               position = "right",
+  #               ncol = 1,
+  #               stepY = 50,
+  #               #stepX = 50,
+  #               zoom = FALSE)
+  #   output$network <- renderVisNetwork({nw})
+  #   
+  #   output$downloadnet <- downloadHandler(
+  #     filename = "graph.html",
+  #     content = function(file) {
+  #       visSave(nw, file)
+  #     }
+  #   )
+  #  
+  #   output$contrast_table <- DT::renderDataTable({a
+  #     DT::datatable(
+  #       dt,
+  #       width = 6,
+  #       class = 'nowrap',
+  #       options = list(scrollX = TRUE, pageLength = 8)
+  #     )
+  #   })
+  #   
+  #   # a table containing description and information of genes included
+  #   output$protein_table <- DT::renderDataTable({
+  #     DT::datatable(
+  #       query_information(proteins),
+  #       width = 6,
+  #       class = "wrap",
+  #       options = list(scrollX = TRUE, pageLength = 8)
+  #     )
+  #   })
+  #   
+  # })
+  # ##################################################################################################
   
-  callModule(shinytab, "ctstab", input$sex, TPM_HS_CTS, skin_colData, human_gene_data,
-             "human", "pre_Surgery", reactive({genes()}), include_deg = TRUE,
-             deg_df_list = list(HS), pop_list = c("Skin HS"), dataset = "Skin CTS",
-             include_subtype = FALSE, parent = session)
-  callModule(shinyscrna, "spattab", reactive({genes()}), pbmc, parent = session)
-  callModule(shinytab, "zhengtab", input$sex, TPM_zheng, zheng_colData,gene_data,"mouse","", reactive({genes()}), parent = session)
-  callModule(shinytab, "hdrgtab", input$sex, TPM_humandrg, humandrg_colData,human_gene_data,"human",c("P","Undetermined"), reactive({genes()}),parent = session)
   
-  PlotHeight = reactive(
-    return(length(data()))
-  )
+  # update the table rows selected
+  shiny::observe({
+    variables$indrows =input$dataset_table_rows_selected
+    
+  })
+  
+  output$dataset_table = DT::renderDataTable({
+    DT::datatable(
+      des_df[c("Dataset", "Pain_Model", "Species", "Tissue")],
+      width = 6,
+      class = 'nowrap',
+      options = list(scrollX = TRUE, scrollY = TRUE, pageLength = 5), selection = list(mode = "single", selected = c(1), target = 'row')
+    )
+  })
+  
+
+  
+  # make sure, no such injury_table: NULL
+  shiny::observe({
+    i = input$dataset_table_rows_selected
+    
+    if (is.null(i) == FALSE) {
+      selected = des_df[i,]
+      name = selected$Name
+      
+      if (i==1){
+        
+        # for database
+        {
+          shiny::callModule(shinypage, name, input$sex, selected$count, col_list[[selected$colDatas]],
+                            selected$Species, selected$pain, reactive({genes()}), include_deg = selected$include_degs, deg_df_name = selected$deg_df_name,
+                            dataset = selected$Dataset, include_subtype = selected$include_subtypes, include_count = selected$include_count, injury_data = "bulkseq_mat", parent = session)
+
+        }
+        
+        # for RData
+        {
+          # shiny::callModule(shinypage, name, input$sex, Seq_Data[[1]][[selected$count]], col_list[[selected$colDatas]],
+          #                   selected$Species, selected$pain, reactive({genes()}), include_deg = selected$include_degs, deg_df_name = DEG_Data[[selected$deg_df_name]],
+          #                   dataset = selected$Dataset, include_subtype = selected$include_subtypes, include_count = selected$include_count, injury_data = Seq_Data[[1]][["bulkseq_mat"]], parent = session)
+          # 
+        }
+        
+        }
+      if (selected$Dataset == "Human DRG spatial-seq"){
+        shiny::callModule(shinyscrna, "spatpage", reactive({genes()}), variables$pbmc)
+      }
+      if ((i!=1) & (i!=9)){
+        
+        # for Database
+        {
+          shiny::callModule(shinypage, name, input$sex, selected$count, col_list[[selected$colDatas]],
+                            selected$Species, selected$pain, reactive({genes()}), include_deg = selected$include_degs, deg_df_name = selected$deg_df_name,
+                            dataset = selected$Dataset, include_subtype = selected$include_subtypes, include_count = selected$include_count, parent = session)
+
+        }
+       
+        # for Rdata
+        {
+          # shiny::callModule(shinypage, name, input$sex, Seq_Data[[1]][[selected$count]], col_list[[selected$colDatas]],
+          #                   selected$Species, selected$pain, reactive({genes()}), include_deg = selected$include_degs, deg_df_name = DEG_Data[[selected$deg_df_name]],
+          #                   dataset = selected$Dataset, include_subtype = selected$include_subtypes, include_count = selected$include_count, parent = session)
+          # 
+        }
+       
+        }
+    }
+    
+  })
+  
   ### leaflet map for contact details
   output$myMap <- renderLeaflet({
     m <- leaflet() %>% addTiles()
@@ -897,7 +790,16 @@ shinyServer(function(input, output, session) {
     m %>% addPopups(-1.2217, 51.76529, "Neural Injury Group")
   })
   
+  # disconnect db when stops
+  onStop(function() {
+    dbDisconnect(conn)
+  })
+  
+  
 })
 
+
 options(warn=-1) # remove warnings
+
+
 

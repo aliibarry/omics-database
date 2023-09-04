@@ -1,0 +1,15 @@
+# Data Processing {#data}
+
+## Preparation
+
+To implement this app, you will need three types of data:
+
+* Count tables in “./data/CountTables/” folder
+* Column Data (abbrev: colData) in “./data/ColDatas/” folder
++ This contains the info about each sample
++ The colnames of colData should include ‘Population’, ‘Timepoint’, ‘Sex’ , ‘Dataset’ and ‘Species’
++ If your experiment does not separate those samples based on any of those parameters, you will need to create a column that specifies this.
++ E.g. if your samples are of mixed sex, you can creates a ‘Sex’ column containing ‘mixed’ for all samples
+
+
+## Building an SQL database
