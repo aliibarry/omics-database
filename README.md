@@ -3,7 +3,7 @@ A framework and example for Shiny (R)-based app to host sequencing data by AMB a
 
 Example database can be found at <https://livedataoxford.shinyapps.io/drg-directory/>  
 
-Manual is available at <https://aliibarry.github.io/database-book/> [beta]  
+Manual is available at <https://aliibarry.github.io/database-book/> 
 
 
 
