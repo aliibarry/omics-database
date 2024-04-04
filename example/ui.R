@@ -10,6 +10,8 @@
 # rsconnect::deployApp()
 # setRepositories(addURLs = c(BioC = "https://bioconductor.org/packages/3.16/bioc"))
 
+members <- data.frame(name=c("App1", "App2"), nr=c("App1", "App2"))
+
 # add libraries 
 {
   
@@ -32,6 +34,7 @@
   library(RSQLite) # for database 
   library(shinybusy)    # for the loader
   library("leaflet") # for map 
+  library(markdown)
 }
 
 
@@ -43,6 +46,7 @@ source("functions.R")
 load("data/network.RData")
 
 ui = function(req){fluidPage(
+  tags$head(includeHTML("www/google-analytics.html")),
   useShinyFeedback(),
   includeCSS("www/style.css"),
   shinyFeedback::useShinyFeedback(),
@@ -90,6 +94,7 @@ ui = function(req){fluidPage(
                                        shinydashboard::menuItem("Network Analysis", tabName = "tabnet", icon = icon("circle-nodes")),
                                        shinydashboard::menuItem("User Guide", tabName = "tabcode", icon = icon("folder-open")),
                                        shinydashboard::menuItem("Contact", tabName = "tabguide", icon = icon("address-book")),
+                                       #shinydashboard::menuItem("test", tabName = "tabtest", icon = icon("address-book")),
                                        br(),
                                        br()
                                      ),
@@ -133,7 +138,7 @@ ui = function(req){fluidPage(
                                          h1(strong("Pain RNA-seq Hub"))),
                                   column(width = 8, offset = 0,
                                          h4("This resource from the Neural Injury Group (NDCN) generates visualisation of pain-related genes both in the context of gene expression and their network associations."),
-                                         h4("This currently includes a curated selection of bulk RNA-seq and scRNA-seq studies. This resource is still being updated (as of Sept 2023). Queries, including citations details, should be directed to Ali Barry (allison.barry@ndcn.ox.ac.uk)) "),
+                                         h4("This currently includes a curated selection of bulk RNA-seq and scRNA-seq studies. This resource is still being updated (as of April 2024). Queries, including citations details, should be directed to Ali Barry (allison.barry@ndcn.ox.ac.uk)) "),
                                          
                                          br(),br()
                                   ),
@@ -342,6 +347,21 @@ ui = function(req){fluidPage(
                 )
                 
         ) # tabItem help guide
+        
+        #################AMB
+        
+      #tabitem code
+      
+      # tabItem(tabName="tabtest",
+      #         h4("Testing"),
+      #         #SselectInput("Member", label=h5("Choose a option"),choices=c('App1','App2')),
+      #         # Lab location map, in a column solely for aesthetic
+      #         htmlOutput("frame")
+      #        
+      #        
+      #) # tabtest help guide
+        
+        
       ) # tabItems (all)
     )  #mainpanel dashboardbody close
   ) # dashboad page close
