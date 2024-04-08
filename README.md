@@ -5,5 +5,6 @@ Example database can be found at <https://livedataoxford.shinyapps.io/drg-direct
 
 Manual is available at <https://aliibarry.github.io/database-book/> 
 
+Additional functionality, such as the embedding of [Goolge Analytics](https://shiny.posit.co/r/articles/build/google-analytics/), can be found through [posit.co](https://shiny.posit.co/).
 
 
